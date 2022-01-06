@@ -2,7 +2,7 @@
 #
 # seqcexit - sequence C exit codes for exit(), usage(), err(), errp()
 #
-# Copyright (c) 2021 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2021,2022 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
@@ -37,7 +37,7 @@ use File::Temp qw(tempfile);
 
 # version
 #
-my $VERSION = "1.0 2021-12-29";
+my $VERSION = "1.1 2022-01-05";
 
 # my vars
 #
@@ -49,12 +49,16 @@ my $usage = "$0 [-v lvl] [-l low] [-h high] [-n] [-s] file.c [file2.c ...]";
 my $help = qq{$usage
 
 	-v lvl		verbose / debugging level (def: 0)
-	-l low		low exit code range (must be >=0 and < high) (def: 0)
+	-l low		low exit code range (must be >=0 and < low != 127) (def: 0)
 	-h high		high exit code range (must be >low and < 256) (def: 249)
 	-n		do not change, nor create files
 	-s		keep a copy of the original filenmame as filename.orig.c
 
 	file.c ...	C source file to process
+
+NOTE: Exit 0 can only be used once at the first exit code use: if low == 0.
+      Exit codes > 255 are not used: instead the next code is low, or 1 if low == 0.
+      Exit 127 is not used: instead next value is used: usually 128 unless high == 128 in which case low is used.
 };
 my $low = 0;		# low exit code range
 my $high = 249;		# high exit code range
@@ -108,8 +112,11 @@ MAIN: {
     if ($high > 255) {
 	error(4, "high must be < 256\nusage: $help");
     }
+    if ($low == 127) {
+	error(5, "low cannot be 127\nusage: $help");
+    }
     if ($low >= $high) {
-	error(5, "low must be < high\nusage: $help");
+	error(6, "low must be < high\nusage: $help");
     }
 
     # cycle thru lines of the argument
@@ -277,7 +284,9 @@ MAIN: {
 #
 # We select the next exit code beyond $exitcode, which is usually $exitcode+1,
 # except when $exitcode >= $high in which case $low is considered.  However
-# if $low == 0, then 1 is used instead.
+# if $low == 0, then 1 is used instead.  We will also skip 127 because
+# a return value of 127 by system() means the execution of the shell failed.
+# Regardless, if the next exit code is >= 256, return to exit code of $low.
 #
 # given:
 #	$exitcode	current exit code
@@ -294,9 +303,16 @@ sub nextexitcode($)
     #
     $ret = $current_code + 1;
 
-    # wrap to low if beyond high
+    # do not use 127 - used by system() when shell cannot be invoked
     #
-    if ($ret > $high) {
+    if ($ret == 127) {
+	# skip 127
+	$ret = 128;
+    }
+
+    # wrap to low if beyond high or beyond 255
+    #
+    if ($ret > $high || $ret > 255) {
 	$ret = $low;
     }
 
