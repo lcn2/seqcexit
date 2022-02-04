@@ -37,7 +37,7 @@ use File::Temp qw(tempfile);
 
 # version
 #
-my $VERSION = "1.1 2022-01-05";
+my $VERSION = "1.2 2022-02-04";
 
 # my vars
 #
@@ -49,18 +49,20 @@ my $usage = "$0 [-v lvl] [-l low] [-h high] [-n] [-s] file.c [file2.c ...]";
 my $help = qq{$usage
 
 	-v lvl		verbose / debugging level (def: 0)
-	-l low		low exit code range (must be >=0 and < low != 127) (def: 0)
-	-h high		high exit code range (must be >low and < 256) (def: 249)
+	-l low		low exit code after wrap around (must be >=0 and < low and != 127) (def: 10)
+			    NOTE: The sequenced exit codes in file.c can start at 0, the low value
+				  only applies when the codes exceed high and need to wrap around.
+	-h high		high exit code range (must be > low and < 256 and != 127) (def: 249)
 	-n		do not change, nor create files
 	-s		keep a copy of the original filenmame as filename.orig.c
 
-	file.c ...	C source file to process
+	file.c ...	C source file(s) to process
 
 NOTE: Exit 0 can only be used once at the first exit code use: if low == 0.
-      Exit codes > 255 are not used: instead the next code is low, or 1 if low == 0.
+      Exit codes > 255 are not used: instead the next code will be set to low, or set to 1 if low == 0.
       Exit 127 is not used: instead next value is used: usually 128 unless high == 128 in which case low is used.
 };
-my $low = 0;		# low exit code range
+my $low = 10;		# low exit code range after wrap around
 my $high = 249;		# high exit code range
 my $noop = undef;	# change nor create no files
 my $save_orig = undef;	# keep the original file as foo.orig.c
@@ -106,17 +108,20 @@ MAIN: {
     if ($#ARGV < 0) {
 	error(2, "missing required argument\nusage: $help");
     }
+    if ($low == 127) {
+	error(3, "low cannot be 127\nusage: $help");
+    }
+    if ($high == 127) {
+	error(4, "high cannot be 127\nusage: $help");
+    }
     if ($low < 0) {
-	error(3, "low must be >= 0\nusage: $help");
+	error(5, "low must be >= 0\nusage: $help");
     }
     if ($high > 255) {
-	error(4, "high must be < 256\nusage: $help");
-    }
-    if ($low == 127) {
-	error(5, "low cannot be 127\nusage: $help");
+	error(6, "high must be < 256\nusage: $help");
     }
     if ($low >= $high) {
-	error(6, "low must be < high\nusage: $help");
+	error(7, "low must be < high\nusage: $help");
     }
 
     # cycle thru lines of the argument
@@ -171,7 +176,7 @@ MAIN: {
 		    #	$5	text after exit code
 		    #
 		    if ($line =~ /^(.*\b)(err|errp|usage)(\s*\()(\d+)(,.*)$/ ||
-		    	$line =~ /^(.*\b)(exit)(\s*\()(\d+)(\);.*)$/) {
+			$line =~ /^(.*\b)(exit)(\s*\()(\d+)(\);.*)$/) {
 
 			# save matched expressions
 			#
@@ -284,7 +289,7 @@ MAIN: {
 #
 # We select the next exit code beyond $exitcode, which is usually $exitcode+1,
 # except when $exitcode >= $high in which case $low is considered.  However
-# if $low == 0, then 1 is used instead.  We will also skip 127 because
+# if $low <= 0, then 1 is used instead.  We will also skip 127 because
 # a return value of 127 by system() means the execution of the shell failed.
 # Regardless, if the next exit code is >= 256, return to exit code of $low.
 #
@@ -379,10 +384,10 @@ sub dbg($@)
     # firewall
     #
     if (!defined $min_lvl) {
-    	error(97, "debug called without a minimum debug level");
+	error(128, "debug called without a minimum debug level");
     }
     if ($min_lvl !~ /-?\d/) {
-    	error(98, "debug called with non-numeric debug level: $min_lvl");
+	error(129, "debug called with non-numeric debug level: $min_lvl");
     }
     if ($opt_v < $min_lvl) {
 	return;
