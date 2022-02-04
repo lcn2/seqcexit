@@ -30,14 +30,14 @@
 #
 use strict;
 use bytes;
-use vars qw($opt_v);
+use vars qw($opt_v $opt_c);
 use Getopt::Long;
 use File::Basename;
 use File::Temp qw(tempfile);
 
 # version
 #
-my $VERSION = "1.2 2022-02-04";
+my $VERSION = "1.3 2022-02-04";
 
 # my vars
 #
@@ -45,33 +45,35 @@ my $file;	# required argument
 
 # usage and help
 #
-my $usage = "$0 [-v lvl] [-l low] [-h high] [-n] [-s] file.c [file2.c ...]";
+my $usage = "$0 [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] file.c [file2.c ...]";
 my $help = qq{$usage
 
 	-v lvl		verbose / debugging level (def: 0)
-	-l low		low exit code after wrap around (must be >=0 and < low and != 127) (def: 10)
-			    NOTE: The sequenced exit codes in file.c can start at 0, the low value
-				  only applies when the codes exceed high and need to wrap around.
-	-h high		high exit code range (must be > low and < 256 and != 127) (def: 249)
+	-b bottom	bottom exit code after wrap around (must be >=0 and < bottom and != 127) (def: 10)
+			    NOTE: The sequenced exit codes in file.c can start at 0. The bottom  value
+				  only applies when the codes exceed top and need to wrap around.
+	-t top		top exit code range (must be > bottom  and < 256 and != 127) (def: 249)
 	-n		do not change, nor create files
 	-s		keep a copy of the original filenmame as filename.orig.c
+	-c		continous sequencing across files (def: always reset code on a new file)
 
 	file.c ...	C source file(s) to process
 
-NOTE: Exit 0 can only be used once at the first exit code use: if low == 0.
-      Exit codes > 255 are not used: instead the next code will be set to low, or set to 1 if low == 0.
-      Exit 127 is not used: instead next value is used: usually 128 unless high == 128 in which case low is used.
+NOTE: Exit 0 can only be used once at the first exit code use: if bottom  == 0.
+      Exit codes > 255 are not used: instead the next code will be set to bottom , or set to 1 if bottom  == 0.
+      Exit 127 is not used: instead next value is used: usually 128 unless top == 128 in which case bottom  is used.
 };
-my $low = 10;		# low exit code range after wrap around
-my $high = 249;		# high exit code range
+my $bottom  = 10;	# bottom exit code range after wrap around
+my $top = 249;		# top exit code range
 my $noop = undef;	# change nor create no files
 my $save_orig = undef;	# keep the original file as foo.orig.c
 my %optctl = (
     "v=i" => \$opt_v,
-    "l=i" => \$low,
-    "h=i" => \$high,
+    "b=i" => \$bottom ,
+    "t=i" => \$top,
     "n" => \$noop,
     "s" => \$save_orig,
+    "c" => \$opt_c,
 );
 
 
@@ -108,20 +110,20 @@ MAIN: {
     if ($#ARGV < 0) {
 	error(2, "missing required argument\nusage: $help");
     }
-    if ($low == 127) {
-	error(3, "low cannot be 127\nusage: $help");
+    if ($bottom  == 127) {
+	error(3, "bottom  cannot be 127\nusage: $help");
     }
-    if ($high == 127) {
-	error(4, "high cannot be 127\nusage: $help");
+    if ($top == 127) {
+	error(4, "top cannot be 127\nusage: $help");
     }
-    if ($low < 0) {
-	error(5, "low must be >= 0\nusage: $help");
+    if ($bottom  < 0) {
+	error(5, "bottom  must be >= 0\nusage: $help");
     }
-    if ($high > 255) {
-	error(6, "high must be < 256\nusage: $help");
+    if ($top > 255) {
+	error(6, "top must be < 256\nusage: $help");
     }
-    if ($low >= $high) {
-	error(7, "low must be < high\nusage: $help");
+    if ($bottom  >= $top) {
+	error(7, "bottom  must be < top\nusage: $help");
     }
 
     # cycle thru lines of the argument
@@ -140,7 +142,7 @@ MAIN: {
 	    };
 	    dbg(2, "# open $ARGV");
 
-	    # open a mnew tempotary file
+	    # open a new tempotary file
 	    #
 	    if (! defined($noop)) {
 		($tmp_fh, $tmp_filename) = tempfile("c.tmpfile.XXXXX",
@@ -148,6 +150,12 @@ MAIN: {
 						     SUFFIX => '.c',
 						     EXLOCK => 1);
 		dbg(1, "# forming $tmp_filename");
+	    }
+
+	    # unless -c, reset exit code for the new file
+	    #
+	    if (! defined($opt_c)) {
+		$exit_seq = undef;
 	    }
 
 	    # process each line in the file
@@ -288,10 +296,10 @@ MAIN: {
 # nextexitcode - return the next non-zero valid exit code
 #
 # We select the next exit code beyond $exitcode, which is usually $exitcode+1,
-# except when $exitcode >= $high in which case $low is considered.  However
-# if $low <= 0, then 1 is used instead.  We will also skip 127 because
+# except when $exitcode >= $top in which case $bottom  is considered.  However
+# if $bottom  <= 0, then 1 is used instead.  We will also skip 127 because
 # a return value of 127 by system() means the execution of the shell failed.
-# Regardless, if the next exit code is >= 256, return to exit code of $low.
+# Regardless, if the next exit code is >= 256, return to exit code of $bottom .
 #
 # given:
 #	$exitcode	current exit code
@@ -315,10 +323,10 @@ sub nextexitcode($)
 	$ret = 128;
     }
 
-    # wrap to low if beyond high or beyond 255
+    # wrap to bottom  if beyond top or beyond 255
     #
-    if ($ret > $high || $ret > 255) {
-	$ret = $low;
+    if ($ret > $top || $ret > 255) {
+	$ret = $bottom ;
     }
 
     # do not reuse (due to wrapping) 0, jump to 1 instead
