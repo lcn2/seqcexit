@@ -30,7 +30,7 @@
 #
 use strict;
 use bytes;
-use vars qw($opt_v $opt_c);
+use vars qw($opt_v $opt_c $opt_h);
 use Getopt::Long;
 use File::Basename;
 use File::Temp qw(tempfile);
@@ -45,9 +45,10 @@ my $file;	# required argument
 
 # usage and help
 #
-my $usage = "$0 [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] file.c [file2.c ...]";
+my $usage = "$0 [-h] [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] file.c [file2.c ...]";
 my $help = qq{$usage
 
+	-h		print this usage message and VERSION stringand exit 0
 	-v lvl		verbose / debugging level (def: 0)
 	-b bottom	bottom exit code after wrap around (must be >=0 and < bottom and != 127) (def: 10)
 			    NOTE: The sequenced exit codes in file.c can start at 0. The bottom  value
@@ -68,6 +69,7 @@ my $top = 249;		# top exit code range
 my $noop = undef;	# change nor create no files
 my $save_orig = undef;	# keep the original file as foo.orig.c
 my %optctl = (
+    "h" => \$opt_h,
     "v=i" => \$opt_v,
     "b=i" => \$bottom ,
     "t=i" => \$top,
@@ -106,6 +108,9 @@ MAIN: {
     #
     if (!GetOptions(%optctl)) {
 	error(1, "invalid command line\nusage: $help");
+    }
+    if (defined $opt_h) {
+	error(0, "usage: $help\nVersion: $VERSION");
     }
     if ($#ARGV < 0) {
 	error(2, "missing required argument\nusage: $help");
