@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# seqcexit - sequence C exit codes for exiting functions
+# seqcexit - sequence C exit codes for special functions that exit
 #
 # The following functions called, if they have a leading integer
 # argument, are sequenced by seqcexit:
