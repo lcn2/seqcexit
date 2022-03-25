@@ -6,17 +6,17 @@
 # argument, are sequenced by seqcexit:
 #
 #	exit(99);
-#	err(99, ...
-#	errp(99, ...
-#	errc(99, ...
-#	errx(99, ...
-#	verr(99, ...
-#	verrc(99, ...
-#	verrx(99, ...
-#	vfprintf_usage(99, ...
-#	warn_or_err(99, ...
-#	warnp_or_errp(99, ...
-#	usage(99, ...
+#	err(100, ...
+#	errp(101, ...
+#	errc(102, ...
+#	errx(103, ...
+#	verr(104, ...
+#	verrc(105, ...
+#	verrx(106, ...
+#	vfprintf_usage(107, ...
+#	warn_or_err(108, ...
+#	warnp_or_errp(109, ...
+#	usage(110, ...
 #
 # Copyright (c) 2021,2022 by Landon Curt Noll.  All Rights Reserved.
 #
@@ -53,7 +53,7 @@ use File::Temp qw(tempfile);
 
 # version
 #
-my $VERSION = "1.4 2022-02-20";
+my $VERSION = "1.5 2022-03-25";
 
 # my vars
 #
@@ -61,7 +61,7 @@ my $file;	# required argument
 
 # usage and help
 #
-my $usage = "$0 [-h] [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] file.c [file2.c ...]";
+my $usage = "$0 [-h] [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] file [file ...]";
 my $help = qq{$usage
 
 	-h		print this usage message and VERSION stringand exit 0
@@ -74,7 +74,7 @@ my $help = qq{$usage
 	-s		keep a copy of the original filenmame as filename.orig.c
 	-c		continous sequencing across files (def: always reset code on a new file)
 
-	file.c ...	C source file(s) to process
+	file ...	source file(s) to process
 
 NOTE: Exit 0 can only be used once at the first exit code use: if bottom  == 0.
       Exit codes > 255 are not used: instead the next code will be set to bottom , or set to 1 if bottom  == 0.
@@ -82,18 +82,18 @@ NOTE: Exit 0 can only be used once at the first exit code use: if bottom  == 0.
 
 The following functions calls, with a leading integer argument, are processed by seqcexit:
 
-    exit(99);
-    err(99, ...
-    errp(99, ...
-    errc(99, ...
-    errx(99, ...
-    verr(99, ...
-    verrc(99, ...
-    verrx(99, ...
-    vfprintf_usage(99, ...
-    warn_or_err(99, ...
-    warnp_or_errp(99, ...
-    usage(99, ...
+    exit(111);
+    err(112, ...
+    errp(113, ...
+    errc(114, ...
+    errx(115, ...
+    verr(116, ...
+    verrc(117, ...
+    verrx(118, ...
+    vfprintf_usage(119, ...
+    warn_or_err(120, ...
+    warnp_or_errp(121, ...
+    usage(122, ...
 };
 my $bottom  = 10;	# bottom exit code range after wrap around
 my $top = 249;		# top exit code range
@@ -168,172 +168,167 @@ MAIN: {
 
 	# process only *.c files
 	dbg(1, "# considering $ARGV");
-	if ($ARGV =~ /\.c$/) {
 
-	    # open file if possible
+	# open file if possible
+	#
+	open(FH, $ARGV) or do {
+	    dbg(1, "# skipping file, cannot open $ARGV: $!");
+	    next;
+	};
+	dbg(2, "# open $ARGV");
+
+	# open a new tempotary file
+	#
+	if (! defined($noop)) {
+	    ($tmp_fh, $tmp_filename) = tempfile("c.tmpfile.XXXXX",
+						 DIR => dirname($ARGV),
+						 SUFFIX => '.c',
+						 EXLOCK => 1);
+	    dbg(1, "# forming $tmp_filename");
+	}
+
+	# unless -c, reset exit code for the new file
+	#
+	if (! defined($opt_c)) {
+	    $exit_seq = undef;
+	}
+
+	# process each line in the file
+	#
+	while ($line = <FH>) {
+
+	    # do not exit code process lines with /*ooo*/
 	    #
-	    open(FH, $ARGV) or do {
-		dbg(1, "# skipping file, cannot open $ARGV: $!");
-		next;
-	    };
-	    dbg(2, "# open $ARGV");
+	    if ($line !~ /\/\*ooo\*\//) {
+		my ($pre, $funcname, $whiteparen, $code, $post);	# parse function line
+		my ($prev_exit_seq, $orig_code);
 
-	    # open a new tempotary file
-	    #
-	    if (! defined($noop)) {
-		($tmp_fh, $tmp_filename) = tempfile("c.tmpfile.XXXXX",
-						     DIR => dirname($ARGV),
-						     SUFFIX => '.c',
-						     EXLOCK => 1);
-		dbg(1, "# forming $tmp_filename");
-	    }
-
-	    # unless -c, reset exit code for the new file
-	    #
-	    if (! defined($opt_c)) {
-		$exit_seq = undef;
-	    }
-
-	    # process each line in the file
-	    #
-	    while ($line = <FH>) {
-
-		# do not exit code process lines with /*ooo*/
+		# look for line of the form (were 99 is any set of exit code digits)
 		#
-		if ($line !~ /\/\*ooo\*\//) {
-		    my ($pre, $funcname, $whiteparen, $code, $post);	# parse function line
-		    my ($prev_exit_seq, $orig_code);
+		#	exit(123);
+		#	err(124, ...
+		#	errp(125, ...
+		#	errc(126, ...
+		#	errx(128, ...
+		#	verr(129, ...
+		#	verrc(130, ...
+		#	verrx(131, ...
+		#	vfprintf_usage(132, ...
+		#	warn_or_err(133, ...
+		#	warnp_or_errp(134, ...
+		#	usage(135, ...
+		#
+		# We will ignore lines with whitespace around the exit code.
+		#
+		#	$1	beginning of line up to the calling function
+		#	$2	calling function (exit|err|errp|usage)
+		#	$3	white and ( before the exit code
+		#	$4	exit codde
+		#	$5	text after exit code
+		#
+		if ($line =~ /^(.*\b)(exit)(\s*\()(\d+)(\);.*)$/ ||
+		    $line =~ /^(.*\b)(err|errp|errc|errx|verr|verrc|verrx|vfprintf_usage|warn_or_err|warnp_or_errp|usage)(\s*\()(\d+)(,.*)$/) {
 
-		    # look for line of the form (were 99 is any set of exit code digits)
+		    # save matched expressions
 		    #
-		    #	exit(99);
-		    #	err(99, ...
-		    #	errp(99, ...
-		    #	errc(99, ...
-		    #	errx(99, ...
-		    #	verr(99, ...
-		    #	verrc(99, ...
-		    #	verrx(99, ...
-		    #	vfprintf_usage(99, ...
-		    #	warn_or_err(99, ...
-		    #	warnp_or_errp(99, ...
-		    #	usage(99, ...
+		    $pre = $1;
+		    $funcname = $2;
+		    $whiteparen = $3;
+		    $code = $4;
+		    $post = $5;
+		    dbg(5, "possible exit sequenceing call: $funcname$whiteparen$code");
+		    dbg(6, "possible exit sequenceing line: $pre$funcname$whiteparen$code$post");
+
+		    # if first exit number, start with this sequence
 		    #
-		    # We will ignore lines with whitespace around the exit code.
+		    $orig_code = $code;
+		    $prev_exit_seq = $exit_seq;
+		    if (! defined($exit_seq)) {
+			$exit_seq = $code;
+
+		    # otherwise use the next in the sequence
 		    #
-		    #	$1	beginning of line up to the calling function
-		    #	$2	calling function (exit|err|errp|usage)
-		    #	$3	white and ( before the exit code
-		    #	$4	exit codde
-		    #	$5	text after exit code
-		    #
-		    if ($line =~ /^(.*\b)(exit)(\s*\()(\d+)(\);.*)$/ ||
-			$line =~ /^(.*\b)(err|errp|errc|errx|verr|verrc|verrx|vfprintf_usage|warn_or_err|warnp_or_errp|usage)(\s*\()(\d+)(,.*)$/) {
-
-			# save matched expressions
-			#
-			$pre = $1;
-			$funcname = $2;
-			$whiteparen = $3;
-			$code = $4;
-			$post = $5;
-			dbg(5, "possible exit sequenceing call: $funcname$whiteparen$code");
-			dbg(6, "possible exit sequenceing line: $pre$funcname$whiteparen$code$post");
-
-			# if first exit number, start with this sequence
-			#
-			$orig_code = $code;
-			$prev_exit_seq = $exit_seq;
-			if (! defined($exit_seq)) {
-			    $exit_seq = $code;
-
-			# otherwise use the next in the sequence
-			#
-			} else {
-			    $exit_seq = nextexitcode($exit_seq);
-			    $code = $exit_seq;
-			}
-
-			# skip sequencing if $pre is an open C /* comment
-			#			  or in a multi-line * comment
-			#			  or in a // comment
-			#
-			# While not perfect, the regular expression will catch the case
-			# where we are in the middle of a comment.
-			#
-			if ($pre =~ /\/\*[^*\/]*$/ || $pre =~ /\s*\*\s*$/ || $pre =~ /\/\//) {
-
-			    # /* do not alter exit code, nor change exit the sequence */
-			    dbg(5, "restoring line, likely open comment found: $pre");
-			    $exit_seq = $prev_exit_seq;
-			    $code = $orig_code;
-
-			# if we find a /*coo*/ comment, then reset the sequence
-			#
-			} elsif ($pre =~ /\/\*coo\*\// || $post =~ /\/\*coo\*\//) {
-
-			    # force the exit sequence to change to match current line
-			    #
-			    dbg(4, "found /*coo*/, reset exit sequence from $exit_seq to $orig_code");
-			    $exit_seq = $orig_code;
-			    $code = $orig_code;
-			}
-			if ($code != $orig_code) {
-			    dbg(3, "change exit code on line from $orig_code to $code");
-			}
-
-			# reform line with sequenced exit code
-			#
-			$line = $pre . $funcname . $whiteparen . $code . $post . "\n";
+		    } else {
+			$exit_seq = nextexitcode($exit_seq);
+			$code = $exit_seq;
 		    }
-		}
 
-		# print the (possibly modified) line to the temp file
-		#
-		if (! defined($noop)) {
-		    print $tmp_fh $line or die "connot write line to $tmp_filename: $!";
+		    # skip sequencing if $pre is an open C /* comment
+		    #			  or in a multi-line * comment
+		    #			  or in a // comment
+		    #
+		    # While not perfect, the regular expression will catch the case
+		    # where we are in the middle of a comment.
+		    #
+		    if ($pre =~ /\/\*[^*\/]*$/ || $pre =~ /\s*\*\s*$/ || $pre =~ /\/\//) {
+
+			# /* do not alter exit code, nor change exit the sequence */
+			dbg(5, "restoring line, likely open comment found: $pre");
+			$exit_seq = $prev_exit_seq;
+			$code = $orig_code;
+
+		    # if we find a /*coo*/ comment, then reset the sequence
+		    #
+		    } elsif ($pre =~ /\/\*coo\*\// || $post =~ /\/\*coo\*\//) {
+
+			# force the exit sequence to change to match current line
+			#
+			dbg(4, "found /*coo*/, reset exit sequence from $exit_seq to $orig_code");
+			$exit_seq = $orig_code;
+			$code = $orig_code;
+		    }
+		    if ($code != $orig_code) {
+			dbg(3, "change exit code on line from $orig_code to $code");
+		    }
+
+		    # reform line with sequenced exit code
+		    #
+		    $line = $pre . $funcname . $whiteparen . $code . $post . "\n";
 		}
 	    }
 
-	    # close the temporary file
+	    # print the (possibly modified) line to the temp file
 	    #
 	    if (! defined($noop)) {
-		dbg(2, "# close $tmp_filename");
-		close $tmp_fh or die "cannot close $tmp_filename: $!";
+		print $tmp_fh $line or die "connot write line to $tmp_filename: $!";
 	    }
+	}
 
-	    # close the file
-	    #
-	    dbg(2, "# close $ARGV");
-	    close FH or die "cannot close $ARGV: $!";
+	# close the temporary file
+	#
+	if (! defined($noop)) {
+	    dbg(2, "# close $tmp_filename");
+	    close $tmp_fh or die "cannot close $tmp_filename: $!";
+	}
 
-	    # case: -s
-	    #
-	    # Move original file.c to file.orig.c
-	    #
-	    if (defined($save_orig)) {
-		my $orig_file = $ARGV;
-		$orig_file =~ s/\.c$/.orig.c/;
-		if (! defined($noop)) {
-		    dbg(1, "mv -v $ARGV $orig_file");
-		    rename($ARGV, $orig_file) or die "cannot rename $ARGV to $orig_file: $!";
-		}
-	    }
+	# close the file
+	#
+	dbg(2, "# close $ARGV");
+	close FH or die "cannot close $ARGV: $!";
 
-	    # code: no -s and no -n
-	    #
-	    # move temp filename into place, unlewss
-	    #
+	# case: -s
+	#
+	# Move original file.c to file.orig.c
+	#
+	if (defined($save_orig)) {
+	    my $orig_file = $ARGV;
+	    $orig_file =~ s/\.c$/.orig.c/;
 	    if (! defined($noop)) {
-		dbg(1, "mv -v $tmp_filename $ARGV");
-		rename($tmp_filename, $ARGV) or die "cannot rename $tmp_filename to $ARGV: $!";
+		dbg(1, "mv -v $ARGV $orig_file");
+		rename($ARGV, $orig_file) or die "cannot rename $ARGV to $orig_file: $!";
 	    }
+	}
 
-	} else {
-	    dbg(1, "# skipping non *.c filename: $ARGV");
+	# code: no -s and no -n
+	#
+	# move temp filename into place, unlewss
+	#
+	if (! defined($noop)) {
+	    dbg(1, "mv -v $tmp_filename $ARGV");
+	    rename($tmp_filename, $ARGV) or die "cannot rename $tmp_filename to $ARGV: $!";
 	}
     }
-    exit(0);
+    exit(0); # /*ooo*/
 }
 
 
