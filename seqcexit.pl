@@ -164,7 +164,7 @@ MAIN: {
 	error(7, "bottom  must be < top\nusage: $help");
     }
 
-    # cycle thru lines of the argument
+    # cycle through lines of the argument
     #
     while ($ARGV = shift @ARGV) {
 
@@ -179,7 +179,7 @@ MAIN: {
 	};
 	dbg(2, "# open $ARGV");
 
-	# open a new tempotary file
+	# open a new temporary file
 	#
 	if (! defined($noop)) {
 	    ($tmp_fh, $tmp_filename) = tempfile("c.tmpfile.XXXXX",
@@ -226,7 +226,7 @@ MAIN: {
 		#	$1	beginning of line up to the calling function
 		#	$2	calling function (exit|err|errp|usage)
 		#	$3	white and ( before the exit code
-		#	$4	exit codde
+		#	$4	exit code
 		#	$5	text after exit code
 		#
 		if ($line =~ /^(.*\b)(exit)(\s*\()(\d+)(\);.*)$/ ||
@@ -324,7 +324,7 @@ MAIN: {
 
 	# code: no -s and no -n
 	#
-	# move temp filename into place, unlewss
+	# move temp filename into place, unless -n
 	#
 	if (! defined($noop)) {
 	    dbg(1, "mv -v $tmp_filename $ARGV");
