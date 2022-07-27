@@ -3,50 +3,16 @@
 # seqcexit - sequence C exit codes for special functions that exit
 #
 # The following functions called, if they have a leading integer
-# argument, are sequenced by seqcexit:
+# argument, are sequenced by seqcexit, unless removed by -U func.
 #
-#	exit(99);
+# See the func hash below for a list of functions.  With -v 3,
+# the list of functions that will be processed as debug statements.
 #
-#	err(100, ...
-#	verr(101, ...
-#	ferr(102, ...
-#	vferr(103, ...
+# With the exception of exit and usage, the function list in func are functions
+# from the dbg facility were the 1st argument is numeric.  For information on
+# the dbg facility, visit:
 #
-#	errp(104, ...
-#	verrp(105, ...
-#	ferrp(106, ...
-#	vferrp(107, ...
-#
-#	werr(108, ...
-#	vwerr(109, ...
-#	fwerr(110, ...
-#	vfwerr(111, ...
-#	snwerr(112, ...
-#	vsnwerr(113, ...
-#
-#	werrp(114, ...
-#	vwerrp(115, ...
-#	fwerrp(116, ...
-#	vfwerrp(117, ...
-#	snwerrp(118, ...
-#	vsnwerrp(119, ...
-#
-#	warn_or_err(120, ...
-#	vwarn_or_err(121, ...
-#	fwarn_or_err(122, ...
-#	vfwarn_or_err(123, ...
-#
-#	warnp_or_errp(124, ...
-#	vwarnp_or_errp(125, ...
-#	fwarnp_or_errp(126, ...
-#	vfwarnp_or_errp(128, ...
-#
-#	printf_usage(129, ...
-#	vprintf_usage(130, ...
-#	fprintf_usage(131, ...
-#	vfprintf_usage(132, ...
-#
-#	usage(133, ...
+#	https://github.com/lcn2/dbg
 #
 # Copyright (c) 2021,2022 by Landon Curt Noll.  All Rights Reserved.
 #
@@ -83,7 +49,7 @@ use File::Temp qw(tempfile);
 
 # version
 #
-my $VERSION = "1.9 2022-06-24";
+my $VERSION = "1.10 2022-06-26";
 
 # my vars
 #
@@ -91,82 +57,118 @@ my $file;	# required argument
 
 # usage and help
 #
-my $usage = "$0 [-h] [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] file [file ...]";
+my $usage = "$0 [-h] [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] [[-D func] ...] [[-U func] ...] file [file ...]";
 my $help = qq{$usage
 
 	-h		print this usage message and VERSION stringand exit 0
 	-v lvl		verbose / debugging level (def: 0)
 	-b bottom	bottom exit code after wrap around (must be >=0 and < bottom and != 127) (def: 10)
-			    NOTE: The sequenced exit codes in file.c can start at 0. The bottom  value
-				  only applies when the codes exceed top and need to wrap around.
+			    NOTE: The sequenced exit codes in file.c can start at 0.
+				  The bottom value only applies when the codes exceed top and need to wrap around.
 	-t top		top exit code range (must be > bottom  and < 256 and != 127) (def: 249)
 	-n		do not change, nor create files
 	-s		keep a copy of the original filenmame as filename.orig.c
 	-c		continous sequencing across files (def: always reset code on a new file)
 
+	-D func		Add function func to sequencing list
+	-U func		Remove function func to sequencing list
+			    NOTE: Multiple -D func and -U func are allowed on the command line.
+				  All -D func are added 1st, then all -U func are removed 2nd.
+
 	file ...	source file(s) to process
 
-NOTE: Exit 0 can only be used once at the first exit code use: if bottom  == 0.
-      Exit codes > 255 are not used: instead the next code will be set to bottom , or set to 1 if bottom  == 0.
-      Exit 127 is not used: instead next value is used: usually 128 unless top == 128 in which case bottom  is used.
+NOTE: Exit 0 can only be used once at the first exit code use: if bottom == 0.
+      Exit codes > 255 are not used: instead the next code will be set to bottom, or set to 1 if bottom == 0.
+      Exit 127 is not used: instead next value is used: usually 128 unless top == 128 in which case bottom is used.
 
-The following functions calls, with a leading integer argument, are processed by seqcexit:
+The following functions calls with a leading integer argument, unless removed by -U func, are processed by seqcexit:
 
-	exit(134);
+	exit(100);
+	usage(101, ...
 
-	err(135, ...
-	verr(136, ...
-	ferr(137, ...
-	vferr(138, ...
+	err(102, ...
+	verr(103, ...
+	ferr(104, ...
+	vferr(105, ...
 
-	errp(139, ...
-	verrp(140, ...
-	ferrp(141, ...
-	vferrp(142, ...
+	errp(106, ...
+	verrp(107, ...
+	ferrp(108, ...
+	vferrp(109, ...
 
-	werr(143, ...
-	vwerr(144, ...
-	fwerr(145, ...
-	vfwerr(146, ...
-	snwerr(147, ...
-	vsnwerr(148, ...
+	werr(110, ...
+	vwerr(111, ...
+	fwerr(112, ...
+	vfwerr(113, ...
+	snwerr(114, ...
+	vsnwerr(115, ...
 
-	werrp(149, ...
-	vwerrp(150, ...
-	fwerrp(151, ...
-	vfwerrp(152, ...
-	snwerrp(153, ...
-	vsnwerrp(154, ...
+	werrp(116, ...
+	vwerrp(117, ...
+	fwerrp(118, ...
+	vfwerrp(119, ...
+	snwerrp(120, ...
+	vsnwerrp(121, ...
 
-	warn_or_err(155, ...
-	vwarn_or_err(156, ...
-	fwarn_or_err(157, ...
-	vfwarn_or_err(158, ...
+	warn_or_err(122, ...
+	vwarn_or_err(123, ...
+	fwarn_or_err(124, ...
+	vfwarn_or_err(125, ...
 
-	warnp_or_errp(159, ...
-	vwarnp_or_errp(160, ...
-	fwarnp_or_errp(161, ...
-	vfwarnp_or_errp(162, ...
+	warnp_or_errp(126, ...
+	vwarnp_or_errp(128, ...
+	fwarnp_or_errp(129, ...
+	vfwarnp_or_errp(130, ...
 
-	printf_usage(163, ...
-	vprintf_usage(164, ...
-	fprintf_usage(165, ...
-	vfprintf_usage(166, ...
+	printf_usage(131, ...
+	vprintf_usage(132, ...
+	fprintf_usage(133, ...
+	vfprintf_usage(134, ...
 
-	usage(167, ...
+NOTE: With the exception of exit and usage, the above function list are functions
+      from the dbg facility were the 1st argument is numberic.  For information on
+      the dbg facility, visit:
+
+	https://github.com/lcn2/dbg
 };
 my $bottom  = 10;	# bottom exit code range after wrap around
 my $top = 249;		# top exit code range
 my $noop = undef;	# change nor create no files
 my $save_orig = undef;	# keep the original file as foo.orig.c
+my @D_list;		# list of functions referenced by -D func
+my @U_list;		# list of functions referenced by -U func
 my %optctl = (
     "h" => \$opt_h,
     "v=i" => \$opt_v,
-    "b=i" => \$bottom ,
+    "b=i" => \$bottom,
     "t=i" => \$top,
     "n" => \$noop,
     "s" => \$save_orig,
     "c" => \$opt_c,
+    "D=s@" => \@D_list,
+    "U=s@" => \@U_list,
+);
+
+# list of functions to sequence
+#
+my %func = (
+    "exit" => 0,
+
+    "usage" => 0,
+
+    "err" => 0, "verr" => 0, "ferr" => 0, "vferr" => 0,
+
+    "errp" => 0, "verrp" => 0, "ferrp" => 0, "vferrp" => 0,
+
+    "werr" => 0, "vwerr" => 0, "fwerr" => 0, "vfwerr" => 0, "snwerr" => 0, "vsnwerr" => 0,
+
+    "werrp" => 0, "vwerrp" => 0, "fwerrp" => 0, "vfwerrp" => 0, "snwerrp" => 0, "vsnwerrp" => 0,
+
+    "warn_or_err" => 0, "vwarn_or_err" => 0, "fwarn_or_err" => 0, "vfwarn_or_err" => 0,
+
+    "warnp_or_errp" => 0, "vwarnp_or_errp" => 0, "fwarnp_or_errp" => 0, "vfwarnp_or_errp" => 0,
+
+    "printf_usage" => 0, "vprintf_usage" => 0, "fprintf_usage" => 0, "vfprintf_usage" => 0,
 );
 
 
@@ -200,6 +202,9 @@ MAIN: {
     if (!GetOptions(%optctl)) {
 	error(1, "invalid command line\nusage: $help");
     }
+
+    # arg checking
+    #
     if (defined $opt_h) {
 	error(0, "usage: $help\nVersion: $VERSION");
     }
@@ -222,6 +227,26 @@ MAIN: {
 	error(7, "bottom  must be < top\nusage: $help");
     }
 
+    # Add all -D func first
+    #
+    foreach my $func_name (@D_list) {
+	dbg(5, "# adding function to list: $func_name");
+	$func{$func_name} = 0;
+    }
+
+    # Remove all -U func second
+    #
+    foreach my $func_name (@U_list) {
+	dbg(5, "# removing function from list: $func_name");
+	delete($func{$func_name});
+    }
+
+    # print list of sequencing functions if debugging
+    #
+    foreach my $func_name (sort keys %func) {
+	dbg(3, "# will sequence: $func_name");
+    }
+
     # cycle through lines of the argument
     #
     while ($ARGV = shift @ARGV) {
@@ -235,7 +260,7 @@ MAIN: {
 	    dbg(1, "# skipping file, cannot open $ARGV: $!");
 	    next;
 	};
-	dbg(2, "# open $ARGV");
+	dbg(3, "# open $ARGV");
 
 	# open a new temporary file
 	#
@@ -244,7 +269,7 @@ MAIN: {
 						 DIR => dirname($ARGV),
 						 SUFFIX => '.c',
 						 EXLOCK => 1);
-	    dbg(1, "# forming $tmp_filename");
+	    dbg(3, "# forming $tmp_filename");
 	}
 
 	# unless -c, reset exit code for the new file
@@ -263,61 +288,21 @@ MAIN: {
 		my ($pre, $funcname, $whiteparen, $code, $post);	# parse function line
 		my ($prev_exit_seq, $orig_code);
 
-		# look for line of the form: (where digits can be any integer >= 0)
+		# look for line of the form: (where 123 can be any integer >= 0)
 		#
-		#	exit(168);
-		#
-		#	err(169, ...
-		#	verr(170, ...
-		#	ferr(171, ...
-		#	vferr(172, ...
-		#
-		#	errp(173, ...
-		#	verrp(174, ...
-		#	ferrp(175, ...
-		#	vferrp(176, ...
-		#
-		#	werr(177, ...
-		#	vwerr(178, ...
-		#	fwerr(179, ...
-		#	vfwerr(180, ...
-		#	snwerr(181, ...
-		#	vsnwerr(182, ...
-		#
-		#	werrp(183, ...
-		#	vwerrp(184, ...
-		#	fwerrp(185, ...
-		#	vfwerrp(186, ...
-		#	snwerrp(187, ...
-		#	vsnwerrp(188, ...
-		#
-		#	warn_or_err(189, ...
-		#	vwarn_or_err(190, ...
-		#	fwarn_or_err(191, ...
-		#	vfwarn_or_err(192, ...
-		#
-		#	warnp_or_errp(193, ...
-		#	vwarnp_or_errp(194, ...
-		#	fwarnp_or_errp(195, ...
-		#	vfwarnp_or_errp(196, ...
-		#
-		#	printf_usage(197, ...
-		#	vprintf_usage(198, ...
-		#	fprintf_usage(199, ...
-		#	vfprintf_usage(200, ...
-		#
-		#	usage(201, ...
+		#	func(123);
+		#	func(123, ...
 		#
 		# We will ignore lines with whitespace around the exit code.
 		#
 		#	$1	beginning of line up to the calling function
-		#	$2	calling function (such as exit, err, werr, etc.)
+		#	$2	calling function name
 		#	$3	white and ( before the exit code
 		#	$4	exit code
 		#	$5	text after exit code
 		#
-		if ($line =~ /^(.*\b)(exit)(\s*\()(\d+)(\);.*)$/ ||
-		    $line =~ /^(.*\b)(v?f?w?errp?|v?snwerrp?|v?f?warn_or_err|v?f?warnp_or_errp|v?f?printf_usage|usage)(\s*\()(\d+)(,.*)$/) {
+		if ($line =~ /^(.*\b)([A-Za-z][A-Za-z0-9_]*)(\s*\()(\d+)(\);.*)$/ ||
+		    $line =~ /^(.*\b)([A-Za-z][A-Za-z0-9_]*)(\s*\()(\d+)(,.*)$/) {
 
 		    # save matched expressions
 		    #
@@ -326,54 +311,63 @@ MAIN: {
 		    $whiteparen = $3;
 		    $code = $4;
 		    $post = $5;
-		    dbg(5, "possible exit sequenceing call: $funcname$whiteparen$code");
-		    dbg(6, "possible exit sequenceing line: $pre$funcname$whiteparen$code$post");
 
-		    # if first exit number, start with this sequence
+		    # process if the function name is listed
 		    #
-		    $orig_code = $code;
-		    $prev_exit_seq = $exit_seq;
-		    if (! defined($exit_seq)) {
-			$exit_seq = $code;
+		    if (exists($func{$funcname})) {
 
-		    # otherwise use the next in the sequence
-		    #
-		    } else {
-			$exit_seq = nextexitcode($exit_seq);
-			$code = $exit_seq;
-		    }
-
-		    # skip sequencing if $pre is an open C /* comment
-		    #			  or in a multi-line * comment
-		    #			  or in a // comment
-		    #
-		    # While not perfect, the regular expression will catch the case
-		    # where we are in the middle of a comment.
-		    #
-		    if ($pre =~ /\/\*[^*\/]*$/ || $pre =~ /\s*\*\s*$/ || $pre =~ /\/\//) {
-
-			# /* do not alter exit code, nor change exit the sequence */
-			dbg(5, "restoring line, likely open comment found: $pre");
-			$exit_seq = $prev_exit_seq;
-			$code = $orig_code;
-
-		    # if we find a /*coo*/ comment, then reset the sequence
-		    #
-		    } elsif ($pre =~ /\/\*coo\*\// || $post =~ /\/\*coo\*\//) {
-
-			# force the exit sequence to change to match current line
+			# debug result
 			#
-			dbg(4, "found /*coo*/, reset exit sequence from $exit_seq to $orig_code");
-			$exit_seq = $orig_code;
-			$code = $orig_code;
-		    }
-		    if ($code != $orig_code) {
-			dbg(3, "change exit code on line from $orig_code to $code");
-		    }
+			++$func{$funcname};	# count function use
+			dbg(9, "possible exit sequenceing call: $funcname$whiteparen$code");
+			dbg(9, "possible exit sequenceing line: $pre$funcname$whiteparen$code$post");
 
-		    # reform line with sequenced exit code
-		    #
-		    $line = $pre . $funcname . $whiteparen . $code . $post . "\n";
+			# if first exit number, start with this sequence
+			#
+			$orig_code = $code;
+			$prev_exit_seq = $exit_seq;
+			if (! defined($exit_seq)) {
+			    $exit_seq = $code;
+
+			# otherwise use the next in the sequence
+			#
+			} else {
+			    $exit_seq = nextexitcode($exit_seq);
+			    $code = $exit_seq;
+			}
+
+			# skip sequencing if $pre is an open C /* comment
+			#			  or in a multi-line * comment
+			#			  or in a // comment
+			#
+			# While not perfect, the regular expression will catch the case
+			# where we are in the middle of a comment.
+			#
+			if ($pre =~ /\/\*[^*\/]*$/ || $pre =~ /\s*\*\s*$/ || $pre =~ /\/\//) {
+
+			    # /* do not alter exit code, nor change exit the sequence */
+			    dbg(7, "restoring line, likely open comment found: $pre");
+			    $exit_seq = $prev_exit_seq;
+			    $code = $orig_code;
+
+			# if we find a /*coo*/ comment, then reset the sequence
+			#
+			} elsif ($pre =~ /\/\*coo\*\// || $post =~ /\/\*coo\*\//) {
+
+			    # force the exit sequence to change to match current line
+			    #
+			    dbg(7, "found /*coo*/, reset exit sequence from $exit_seq to $orig_code");
+			    $exit_seq = $orig_code;
+			    $code = $orig_code;
+			}
+			if ($code != $orig_code) {
+			    dbg(5, "change exit code on line from $orig_code to $code");
+			}
+
+			# reform line with sequenced exit code
+			#
+			$line = $pre . $funcname . $whiteparen . $code . $post . "\n";
+		    }
 		}
 	    }
 
@@ -387,13 +381,13 @@ MAIN: {
 	# close the temporary file
 	#
 	if (! defined($noop)) {
-	    dbg(2, "# close $tmp_filename");
+	    dbg(3, "# close $tmp_filename");
 	    close $tmp_fh or die "cannot close $tmp_filename: $!";
 	}
 
 	# close the file
 	#
-	dbg(2, "# close $ARGV");
+	dbg(3, "# close $ARGV");
 	close FH or die "cannot close $ARGV: $!";
 
 	# case: -s
@@ -404,7 +398,7 @@ MAIN: {
 	    my $orig_file = $ARGV;
 	    $orig_file =~ s/\.c$/.orig.c/;
 	    if (! defined($noop)) {
-		dbg(1, "mv -v $ARGV $orig_file");
+		dbg(3, "mv -v $ARGV $orig_file");
 		rename($ARGV, $orig_file) or die "cannot rename $ARGV to $orig_file: $!";
 	    }
 	}
@@ -414,10 +408,19 @@ MAIN: {
 	# move temp filename into place, unless -n
 	#
 	if (! defined($noop)) {
-	    dbg(1, "mv -v $tmp_filename $ARGV");
+	    dbg(3, "mv -v $tmp_filename $ARGV");
 	    rename($tmp_filename, $ARGV) or die "cannot rename $tmp_filename to $ARGV: $!";
 	}
     }
+
+    # report on function count use
+    #
+    foreach my $func_name (sort keys %func) {
+	if ($func{$func_name} > 0) {
+	    dbg(5, "# function count for $func_name: $func{$func_name}");
+	}
+    }
+
     exit(0); # /*ooo*/
 }
 
