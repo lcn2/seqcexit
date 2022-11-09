@@ -212,7 +212,8 @@ MAIN: {
 	error(0, "usage: $help\nVersion: $VERSION");
     }
     if (defined $opt_cap_v) {
-	error(0, "$VERSION");
+	print "$VERSION\n";
+	exit 0;
     }
     if ($#ARGV < 0) {
 	error(2, "missing required argument\nusage: $help");
