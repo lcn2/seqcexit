@@ -43,14 +43,14 @@
 use strict;
 use bytes;
 use vars qw($opt_v $opt_cap_v $opt_c $opt_h);
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case);
 use File::Basename;
 use File::Temp qw(tempfile);
 use warnings;
 
 # version
 #
-my $VERSION = "1.11 2022-11-09";
+my $VERSION = "1.12 2022-11-09";
 
 # my vars
 #
