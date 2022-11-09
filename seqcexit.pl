@@ -1,4 +1,4 @@
-#!/usr/bin/env perl -w
+#!/usr/bin/env perl
 #
 # seqcexit - sequence C exit codes for special functions that exit
 #
@@ -42,14 +42,15 @@
 #
 use strict;
 use bytes;
-use vars qw($opt_v $opt_c $opt_h);
+use vars qw($opt_v $opt_cap_v $opt_c $opt_h);
 use Getopt::Long;
 use File::Basename;
 use File::Temp qw(tempfile);
+use warnings;
 
 # version
 #
-my $VERSION = "1.10 2022-06-26";
+my $VERSION = "1.11 2022-11-09";
 
 # my vars
 #
@@ -57,11 +58,12 @@ my $file;	# required argument
 
 # usage and help
 #
-my $usage = "$0 [-h] [-v lvl] [-b bottom] [-t top] [-n] [-s] [-c] [[-D func] ...] [[-U func] ...] file [file ...]";
+my $usage = "$0 [-h] [-v lvl] [-V] [-b bottom] [-t top] [-n] [-s] [-c] [[-D func] ...] [[-U func] ...] file [file ...]";
 my $help = qq{$usage
 
 	-h		print this usage message and VERSION stringand exit 0
 	-v lvl		verbose / debugging level (def: 0)
+	-V		print version and exit 0
 	-b bottom	bottom exit code after wrap around (must be >=0 and < bottom and != 127) (def: 10)
 			    NOTE: The sequenced exit codes in file.c can start at 0.
 				  The bottom value only applies when the codes exceed top and need to wrap around.
@@ -140,6 +142,7 @@ my @U_list;		# list of functions referenced by -U func
 my %optctl = (
     "h" => \$opt_h,
     "v=i" => \$opt_v,
+    "V" => \$opt_cap_v,
     "b=i" => \$bottom,
     "t=i" => \$top,
     "n" => \$noop,
@@ -207,6 +210,9 @@ MAIN: {
     #
     if (defined $opt_h) {
 	error(0, "usage: $help\nVersion: $VERSION");
+    }
+    if (defined $opt_cap_v) {
+	error(0, "$VERSION");
     }
     if ($#ARGV < 0) {
 	error(2, "missing required argument\nusage: $help");
