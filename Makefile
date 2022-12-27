@@ -27,7 +27,7 @@
 # Share and enjoy! :-)
 
 
-SHELL= /bin/bash
+SHELL= bash
 
 CC= cc
 RM= rm
