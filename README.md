@@ -112,3 +112,8 @@ For example, this will cause seqcexit to reset the sequence number to 100.
 ```
 
 The exit code that follows will be assigned to 101.
+
+
+# Reporting Security Issues
+
+To report a security issue, please visit "[Reporting Security Issues](https://github.com/lcn2/seqcexit/security/policy)".
