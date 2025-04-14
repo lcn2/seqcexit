@@ -35,7 +35,8 @@ CP= cp
 CHMOD= chmod
 INSTALL= install
 
-DESTDIR= /usr/local/bin
+PREFIX= /usr/local
+DESTDIR= ${PREFIX}/bin
 
 TARGETS= seqcexit
 
